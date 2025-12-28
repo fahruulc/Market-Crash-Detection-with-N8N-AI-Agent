@@ -1,0 +1,225 @@
+{
+  "name": "MARKET CRASH DETECTION",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            },
+            {
+              "triggerAtHour": 14
+            },
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -160,
+        -224
+      ],
+      "id": "0e8d94ed-434c-439c-86be-7d75540db297",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1d&range=5d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        64,
+        -224
+      ],
+      "id": "e0f78390-77d3-43ce-93f2-b64d3601c0c1",
+      "name": "Gold"
+    },
+    {
+      "parameters": {
+        "url": "https://query1.finance.yahoo.com/v8/finance/chart/^JKSE?interval=1d&range=5d",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        288,
+        -224
+      ],
+      "id": "d0a95b16-4593-4b67-b648-8fb870037615",
+      "name": "IHSG"
+    },
+    {
+      "parameters": {
+        "jsCode": "const goldData = $node[\"Gold\"].json.chart.result[0].indicators.quote[0].close;\nconst ihsgData = $node[\"IHSG\"].json.chart.result[0].indicators.quote[0].close;\n\n// Filter out null/undefined values to prevent 'Infinity'\nconst cleanGold = goldData.filter(v => v != null && v > 0);\nconst cleanIhsg = ihsgData.filter(v => v != null && v > 0);\n\n// Current Data\nconst currentGold = cleanGold[cleanGold.length - 1];\nconst currentIhsg = cleanIhsg[cleanIhsg.length - 1];\nconst currentRatio = (currentGold / currentIhsg) * 1000;\n\n// Historical Data (5 days ago)\nconst pastGold = cleanGold[0];\nconst pastIhsg = cleanIhsg[0];\nconst pastRatio = (pastGold / pastIhsg) * 1000;\n\nconst changePct = ((currentRatio - pastRatio) / pastRatio) * 100;\n\nreturn {\n  analysis_date: new Date().toLocaleDateString('en-US'),\n  assets: {\n    gold_price: `$${currentGold.toLocaleString()}`,\n    ihsg_level: currentIhsg.toLocaleString(),\n  },\n  metrics: {\n    current_ratio: currentRatio.toFixed(2),\n    past_ratio: pastRatio.toFixed(2),\n    fear_index_move: `${changePct.toFixed(2)}%`,\n  },\n  conviction_score: changePct > 5 ? \"STRONG BEARISH\" : \"NEUTRAL\",\n  is_crash_warning: changePct > 10,\n  logic_explanation: `Gold rose against stocks by ${changePct.toFixed(2)}% over the last week.`\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -224
+      ],
+      "id": "1621ff04-a662-487d-aa9d-52d1713899c4",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generate a Market Intelligence Briefing based on the following verified data points:\n\nREPORTING METRICS:\n- Reporting Date: {{ $json.analysis_date }}\n- Spot Gold: {{ $json.assets.gold_price }}\n- IHSG Level: {{ $json.assets.ihsg_level }}\n- Intermarket Ratio: {{ $json.metrics.current_ratio }}\n- 7-Day Velocity: {{ $json.metrics.fear_index_move }}\n- Proprietary Conviction Score: {{ $json.conviction_score }}\n\nINSTRUCTIONS: Provide an Executive Summary, a Detailed Intermarket Analysis, and Strategic Asset Allocation advice. Focus on the implication of the {{ $json.metrics.fear_index_move }} move as a signal for institutional de-risking.",
+        "options": {
+          "systemMessage": "=You are a Senior Intermarket Strategist at a Tier-1 Investment Bank. Your objective is to provide a clinical, comprehensive analysis of the Gold-to-IHSG divergence for high-net-worth clients.\n\nReporting Standards:\n1. Tone: Clinical, objective, and authoritative.\n2. Structure: Use clear section headers in uppercase (e.g., EXECUTIVE SUMMARY).\n3. Formatting Constraints: Use minimal symbols. Do not use emojis. Use standard Markdown for bolding and horizontal rules only.\n4. Analysis Depth: > - Interpret the 'Velocity' (rate of change) as institutional capital movement.\n- Correlate the Gold/IHSG Ratio with market 'Risk-Off' or 'Risk-On' states.\n- Provide specific defensive or offensive portfolio weights based on the conviction score.\n5. Strict Constraint: Ensure all sentences are complete and professional. Avoid 'bullet-point-only' responses; provide narrative analysis where needed."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        -224
+      ],
+      "id": "53f535dd-f977-4d38-a98b-d592e4592f3c",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "deepseek/deepseek-r1-0528:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        808,
+        0
+      ],
+      "id": "72e30151-93d9-423b-88e3-6df8b69922bc",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "c6JO0fnM9eXh4ErW",
+          "name": "OpenRouter account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "=1393779039",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1088,
+        -224
+      ],
+      "id": "000fe36e-2621-4eb9-a968-08e3abd1e8cb",
+      "name": "Send a text message",
+      "webhookId": "19a8ed59-4dc5-4008-8a07-b9ae03881c64",
+      "credentials": {
+        "telegramApi": {
+          "id": "POjRIAGianaZ3CE7",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gold",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gold": {
+      "main": [
+        [
+          {
+            "node": "IHSG",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IHSG": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6b873a45-7c29-46f6-aa6e-e76b4f09fd16",
+  "meta": {
+    "instanceId": "1ef395c969a07a12d732a84bc189542686fe9d4a4764919a762d9b2bcb909854"
+  },
+  "id": "BpDykPLy8VY3yXMy",
+  "tags": []
+}
